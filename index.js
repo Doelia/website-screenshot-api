@@ -48,7 +48,7 @@ const screenshot = (async function(url) {
 	page.property('clipRect', { top: 0, left: 0, width: 300, height: 200 });
 
 	await page.open(url);
-	await sleep(3000);
+	await sleep(5000);
 	await page.render(filename);
 	await instance.exit();
 
