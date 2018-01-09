@@ -1,18 +1,26 @@
+require('dotenv').config();
+
 const express = require('express');
 const app = express();
 const phantom = require('phantom');
-const aws = require('aws-sdk'),
-    fs = require('fs');
+const aws = require('aws-sdk');
+const fs = require('fs');
 const md5 = require('md5');
-require('dotenv').config();
 const client = require('./graphqlClient')();
-const port = process.env.PORT || 3000;
 
-async function asyncForEach(array, callback) {
+const port = process.env.PORT || 3000;
+aws.config.region = process.env.AWS_REGION;
+aws.config.update({ accessKeyId: process.env.AWS_ACCESS_KEY, secretAccessKey: process.env.AWS_SECRET_KEY });
+
+const asyncForEach = async (array, callback) => {
 	for (let index = 0; index < array.length; index++) {
 		await callback(array[index], index, array)
 	}
 }
+
+const sleep = (time) => new Promise(resolve => {
+   setTimeout(() => resolve(), time);
+});
 
 const getUrlListToProcess = async () => {
 	const data = await client.request(`{
@@ -29,14 +37,7 @@ const getUrlListToProcess = async () => {
 		.filter(v => v);
 };
 
-aws.config.region = process.env.AWS_REGION;
-aws.config.update({ accessKeyId: process.env.AWS_ACCESS_KEY, secretAccessKey: process.env.AWS_SECRET_KEY });
-
-const sleep = (time) => new Promise(resolve => {
-   setTimeout(() => resolve(), time);
-});
-
-const screenshot = (async function(url) {
+const screenshot = async (url) => {
 	console.log('Taking screenshot of', url, '...');
 
 	const filename = 'screen.png';
@@ -53,7 +54,7 @@ const screenshot = (async function(url) {
 	await instance.exit();
 
 	return filename;
-});
+};
 
 const sendFileToS3 = async (url, filename) => new Promise(resolve => {
 	console.log('Sending', filename, 'of', url, 'to S3...');
@@ -70,19 +71,19 @@ const sendFileToS3 = async (url, filename) => new Promise(resolve => {
 			Key: s3_key,
 			Body: base64data,
 			ACL: 'public-read'
-		}, (rep) => {
+		}, () => {
 			const final_url = 'https://s3-' + process.env.AWS_REGION + '.amazonaws.com/' + process.env.AWS_S3_BUCKET + '/' + s3_key;
-			console.log('Successfully uploaded image.', final_url, rep);
+			console.log('Successfully uploaded image.', final_url);
 			resolve(final_url);
 		});
 	});
 });
 
-app.get('/', function(req, res) {
+app.get('/', (req, res) => {
 	res.send('hello world');
 });
 
-app.get('/take-screenshot', async function(req, res) {
+app.get('/take-screenshot', async (req, res) => {
 	const url_to_shot = req.query.url;
 	if (!url_to_shot) {
 		res.send('Please provide an url as GET parameter');
