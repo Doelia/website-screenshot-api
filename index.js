@@ -6,36 +6,14 @@ const phantom = require('phantom');
 const aws = require('aws-sdk');
 const fs = require('fs');
 const md5 = require('md5');
-const client = require('./graphqlClient')();
 
 const port = process.env.PORT || 3000;
 aws.config.region = process.env.AWS_REGION;
 aws.config.update({ accessKeyId: process.env.AWS_ACCESS_KEY, secretAccessKey: process.env.AWS_SECRET_KEY });
 
-const asyncForEach = async (array, callback) => {
-	for (let index = 0; index < array.length; index++) {
-		await callback(array[index], index, array)
-	}
-}
-
 const sleep = (time) => new Promise(resolve => {
    setTimeout(() => resolve(), time);
 });
-
-const getUrlListToProcess = async () => {
-	const data = await client.request(`{
-		allClients {
-			mainProject {
-				website
-			}
-		}
-	}`);
-	
-	return data.allClients
-		.filter(v => v.mainProject)
-		.map(v => v.mainProject.website)
-		.filter(v => v);
-};
 
 const screenshot = async (url) => {
 	console.log('Taking screenshot of', url, '...');
@@ -73,7 +51,7 @@ const sendFileToS3 = async (url, filename) => new Promise(resolve => {
 			ACL: 'public-read'
 		}, () => {
 			const final_url = 'https://s3-' + process.env.AWS_REGION + '.amazonaws.com/' + process.env.AWS_S3_BUCKET + '/' + s3_key;
-			console.log('Successfully uploaded image.', final_url);
+			console.log('Successfully uploaded image at', final_url);
 			resolve(final_url);
 		});
 	});
@@ -92,16 +70,6 @@ app.get('/take-screenshot', async (req, res) => {
 		const url_final = await sendFileToS3(url_to_shot, filename);
 		res.send(url_final);
 	}
-});
-
-
-app.get('/take-all', async (req, res) => {
-	const url_list = await getUrlListToProcess();
-	res.send({inProcess: url_list});
-	asyncForEach(url_list, async url => {
-		const filename = await screenshot(url);
-		await sendFileToS3(url, filename);
-	});
 });
 
 app.listen(port, function () {
